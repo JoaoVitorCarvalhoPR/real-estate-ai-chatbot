@@ -1,91 +1,91 @@
-# Vera — Assistente de Imóveis via WhatsApp
+# Vera — Real Estate Assistant on WhatsApp
 
-Chatbot de atendimento imobiliário construído para operar no WhatsApp via **SendPulse**, orquestrado em **n8n**, com respostas geradas por IA a partir de uma base de imóveis mantida em tempo real.
+A real estate chatbot built to run on WhatsApp via **SendPulse**, orchestrated with **n8n**, with AI-generated answers drawn from a property database kept up to date in real time.
 
-A "Vera" qualifica leads, responde dúvidas sobre imóveis específicos usando busca semântica (RAG), identifica de qual anúncio pago o lead veio e transfere a conversa para um corretor humano quando necessário.
+"Vera" qualifies leads, answers questions about specific properties using semantic search (RAG), identifies which paid ad a lead came from, and hands the conversation off to a human agent when needed.
 
-## Visão geral
+## Overview
 
-O sistema é dividido em três partes:
+The system is split into three parts:
 
-- **Orquestração conversacional (n8n)** — recebe eventos do WhatsApp via SendPulse, normaliza mensagens (texto, áudio, imagem, documento), consulta a base de imóveis com RAG, chama a OpenAI para gerar a resposta e decide entre responder automaticamente ou acionar um corretor.
-- **Base de conhecimento (PostgreSQL/Supabase + pgvector)** — armazena leads, histórico de conversas, logs e os imóveis com embeddings para busca semântica.
-- **Serviço coletor de imóveis (Node.js + Playwright)** — um microserviço próprio, incluído neste repositório, que visita as páginas públicas dos imóveis e extrai os dados estruturados (preço, características, fotos, descrição) para manter a base sempre atualizada.
+- **Conversation orchestration (n8n)** — receives WhatsApp events via SendPulse, normalizes incoming messages (text, audio, image, document), queries the property database with RAG, calls OpenAI to generate the reply, and decides whether to answer automatically or route to an agent.
+- **Knowledge base (PostgreSQL/Supabase + pgvector)** — stores leads, conversation history, logs, and properties with embeddings for semantic search.
+- **Property collector service (Node.js + Playwright)** — a standalone microservice, included in this repository, that visits each property's public page and extracts structured data (price, features, photos, description) to keep the database current.
 
-## Arquitetura
+## Architecture
 
 ```mermaid
 flowchart LR
-    WA[Cliente no WhatsApp] --> SP[SendPulse]
-    SP <--> N8N[n8n · orquestração da Vera]
+    WA[WhatsApp customer] --> SP[SendPulse]
+    SP <--> N8N[n8n · Vera orchestration]
 
-    N8N --> LLM[OpenAI\nchat · embeddings · áudio · imagem]
+    N8N --> LLM[OpenAI\nchat · embeddings · audio · vision]
     N8N <--> DB[(PostgreSQL / Supabase\npgvector)]
-    N8N -.handoff.-> HUM[Corretor humano]
+    N8N -.handoff.-> HUM[Human agent]
 
-    SHEET[Planilha de imóveis\nexportada da Kenlo] --> ING[Rotina de ingestão]
-    ING --> COL[Serviço coletor\nNode.js + Playwright]
-    COL --> SITE[Site do imóvel]
+    SHEET[Property spreadsheet\nexported from Kenlo] --> ING[Ingestion routine]
+    ING --> COL[Collector service\nNode.js + Playwright]
+    COL --> SITE[Property website]
     ING --> DB
 ```
 
-## Funcionalidades
+## Features
 
-- **Atendimento conversacional com IA**, mantendo contexto e histórico por lead.
-- **Busca semântica (RAG)** sobre a descrição dos imóveis, com fallback para busca por código exato.
-- **Atribuição de origem**: reconhece quando o contato vem de um anúncio do Meta/Facebook e associa o lead ao imóvel anunciado.
-- **Processamento de mídia**: transcrição de áudio, análise de imagem e tratamento de documentos enviados pelo cliente.
-- **Handoff para atendimento humano**, com registro de logs e liberação/retorno do lead para a IA ao final do atendimento.
-- **Debounce de mensagens**: agrupa mensagens enviadas em sequência rápida antes de gerar uma resposta.
-- **Ingestão automática de imóveis**: leitura periódica de uma planilha exportada da Kenlo, coleta dos dados de cada imóvel e atualização da base vetorial.
-- **Pipeline de erros centralizado**, com normalização e log de falhas em qualquer ponto do fluxo.
+- **AI-driven conversation**, keeping context and history per lead.
+- **Semantic search (RAG)** over property descriptions, with a fallback to exact code lookup.
+- **Ad attribution**: recognizes when a contact comes from a Meta/Facebook ad and links the lead to the advertised property.
+- **Media processing**: audio transcription, image analysis, and handling of documents sent by the customer.
+- **Human handoff**, with logging and release/return of the lead to the AI once the human conversation ends.
+- **Message debouncing**: batches messages sent in quick succession before generating a single reply.
+- **Automatic property ingestion**: periodically reads a spreadsheet exported from Kenlo, collects each property's data, and updates the vector database.
+- **Centralized error pipeline**, normalizing and logging failures from any point in the flow.
 
 ## Stack
 
-| Camada | Tecnologia |
+| Layer | Technology |
 |---|---|
-| Orquestração | n8n |
-| Mensageria | SendPulse (WhatsApp Business API) |
-| IA | OpenAI (chat, embeddings, transcrição, visão) |
-| Dados | PostgreSQL / Supabase (pgvector) |
-| Catálogo de imóveis | Google Sheets |
-| Coleta de dados | Node.js, Express, Playwright |
+| Orchestration | n8n |
+| Messaging | SendPulse (WhatsApp Business API) |
+| AI | OpenAI (chat, embeddings, transcription, vision) |
+| Data | PostgreSQL / Supabase (pgvector) |
+| Property catalog | Google Sheets |
+| Data collection | Node.js, Express, Playwright |
 
-## Serviço coletor de imóveis
+## Property collector service
 
-Está incluído neste repositório em [`collector-service/`](collector-service) — é a única parte com código-fonte completo, por não conter regras de negócio do chatbot.
+Included in this repository under [`collector-service/`](collector-service) — the only part with full source code, since it holds no chatbot business logic.
 
-Expõe uma API HTTP simples, autenticada por API key, que o n8n chama sempre que precisa (re)coletar os dados de um imóvel:
+It exposes a simple HTTP API, authenticated with an API key, that n8n calls whenever it needs to (re)collect a property's data:
 
-- `POST /coletar-imovel` — recebe um código de imóvel e retorna os dados extraídos da página pública correspondente.
-- `GET /health` — status do serviço (navegador ativo, tamanho da fila, etc).
+- `POST /coletar-imovel` — takes a property code and returns the data extracted from the corresponding public page.
+- `GET /health` — service status (browser connected, queue size, etc).
 
-Características de engenharia:
+Engineering highlights:
 
-- **Fila com limite** para não sobrecarregar o navegador com coletas simultâneas.
-- **Reciclagem preventiva do Chromium** após N coletas, evitando vazamento de memória em execuções longas.
-- **Timeout total por coleta** e **retry automático** em falhas transitórias.
-- Bloqueio de imagens/fontes/mídia na navegação para acelerar a coleta.
-- Extração via `JSON-LD` (Schema.org `Product`/`RealEstateListing`) combinada com leitura dos blocos de características da página.
+- **Bounded queue** so concurrent collections don't overload the browser.
+- **Preventive Chromium recycling** after N collections, avoiding memory leaks on long-running instances.
+- **Total timeout per collection** and **automatic retry** on transient failures.
+- Blocks images/fonts/media during navigation to speed up collection.
+- Extraction via `JSON-LD` (Schema.org `Product`/`RealEstateListing`) combined with parsing the page's feature blocks.
 
 ```bash
 cd collector-service
 npm install
-cp .env.example .env   # preencha COLLECTOR_API_KEY e SITE_BASE_URL
+cp .env.example .env   # fill in COLLECTOR_API_KEY and SITE_BASE_URL
 npm start
 ```
 
-## O que não está neste repositório
+## What's not in this repository
 
-Este projeto foi desenvolvido para um cliente real, então propositalmente **não estão publicados**:
+This project was built for a real client, so the following is intentionally **not published**:
 
-- O workflow completo do n8n (145 nós) — contém regras de negócio, prompts e nomes de tabelas específicos do cliente.
-- Prompts do agente de IA.
-- Credenciais, tokens e URLs específicas do site/empresa atendida.
-- Dados de leads e conversas reais.
+- The full n8n workflow (145 nodes) — it contains business rules, prompts, and table names specific to the client.
+- The AI agent's prompts.
+- Credentials, tokens, and URLs specific to the site/company served.
+- Real lead and conversation data.
 
-O objetivo deste repositório é documentar a arquitetura e demonstrar, através do serviço coletor, a qualidade do código de engenharia por trás do projeto.
+The goal of this repository is to document the architecture and, through the collector service, demonstrate the quality of the engineering behind the project.
 
-## Autor
+## Author
 
-Desenvolvido por [seu nome] — [link do GitHub/LinkedIn].
+Built by João Vitor Carvalho — [@JoaoVitorCarvalhoPR](https://github.com/JoaoVitorCarvalhoPR).
