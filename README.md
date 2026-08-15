@@ -1,8 +1,8 @@
-# Vera — Real Estate Assistant on WhatsApp
+# Real Estate Assistant on WhatsApp
 
 A real estate chatbot built to run on WhatsApp via **SendPulse**, orchestrated with **n8n**, with AI-generated answers drawn from a property database kept up to date in real time.
 
-"Vera" qualifies leads, answers questions about specific properties using semantic search (RAG), identifies which paid ad a lead came from, and hands the conversation off to a human agent when needed.
+It qualifies leads, answers questions about specific properties using semantic search (RAG), identifies which paid ad a lead came from, and hands the conversation off to a human agent when needed.
 
 ## Overview
 
@@ -17,7 +17,7 @@ The system is split into three parts:
 ```mermaid
 flowchart LR
     WA[WhatsApp customer] --> SP[SendPulse]
-    SP <--> N8N[n8n · Vera orchestration]
+    SP <--> N8N[n8n · Assistent orchestration]
 
     N8N --> LLM[OpenAI\nchat · embeddings · audio · vision]
     N8N <--> DB[(PostgreSQL / Supabase\npgvector)]
